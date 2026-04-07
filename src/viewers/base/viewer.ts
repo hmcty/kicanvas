@@ -19,6 +19,29 @@ import {
 import { ViewLayerSet } from "./view-layers";
 import { Viewport } from "./viewport";
 
+/**
+ * Marker options for customizing marker appearance
+ */
+export interface MarkerOptions {
+    color?: Color | string;
+    radius?: number;
+    strokeWidth?: number;
+    shape?: 'circle' | 'arrow';
+}
+
+/**
+ * Internal marker representation
+ */
+interface Marker {
+    id: string;
+    position: Vec2;
+    color: Color;
+    radius: number;
+    strokeWidth: number;
+    shape: 'circle' | 'arrow';
+    visible: boolean;
+}
+
 export abstract class Viewer extends EventTarget {
     public renderer: Renderer;
     public viewport: Viewport;
@@ -30,6 +53,8 @@ export abstract class Viewer extends EventTarget {
     protected setup_finished = new Barrier();
 
     #selected: BBox | null;
+    #markers: Map<string, Marker> = new Map();
+    #marker_counter = 0;
 
     constructor(
         public canvas: HTMLCanvasElement,
@@ -223,19 +248,89 @@ export abstract class Viewer extends EventTarget {
 
         layer.clear();
 
+        this.renderer.start_layer(layer.name);
+
+        // Paint selection if present
         if (this.#selected) {
             const bb = this.#selected.copy().grow(this.#selected.w * 0.1);
-            this.renderer.start_layer(layer.name);
 
             this.renderer.line(
                 Polyline.from_BBox(bb, 0.254, this.selection_color),
             );
 
             this.renderer.polygon(Polygon.from_BBox(bb, this.selection_color));
+        }
 
-            layer.graphics = this.renderer.end_layer();
+        // Paint markers
+        for (const marker of this.#markers.values()) {
+            // Skip hidden markers
+            if (!marker.visible) continue;
 
+            if (marker.shape === 'arrow') {
+                // Draw arrow pointing at the position
+                const size = marker.radius * 2;
+                const headHeight = size * 1.2;
+                const shaftWidth = size * 0.3;
+                const shaftHeight = size * 2.5;
+
+                // Arrow head (triangle pointing down at the marker position)
+                const headPoints: Vec2[] = [
+                    new Vec2(marker.position.x, marker.position.y),  // tip
+                    new Vec2(marker.position.x - size / 2, marker.position.y - headHeight),  // left
+                    new Vec2(marker.position.x + size / 2, marker.position.y - headHeight),  // right
+                    new Vec2(marker.position.x, marker.position.y),  // back to tip
+                ];
+
+                // Arrow shaft (rectangle)
+                const shaftTop = marker.position.y - headHeight;
+                const shaftPoints: Vec2[] = [
+                    new Vec2(marker.position.x - shaftWidth / 2, shaftTop),
+                    new Vec2(marker.position.x + shaftWidth / 2, shaftTop),
+                    new Vec2(marker.position.x + shaftWidth / 2, shaftTop - shaftHeight),
+                    new Vec2(marker.position.x - shaftWidth / 2, shaftTop - shaftHeight),
+                    new Vec2(marker.position.x - shaftWidth / 2, shaftTop),
+                ];
+
+                // Draw filled shapes
+                const headPolygon = new Polygon(headPoints, marker.color);
+                this.renderer.polygon(headPolygon);
+
+                const shaftPolygon = new Polygon(shaftPoints, marker.color);
+                this.renderer.polygon(shaftPolygon);
+
+                // Draw strokes
+                const strokeColor = marker.color.copy();
+                strokeColor.a = Math.min(1.0, strokeColor.a * 1.5);
+                this.renderer.line(headPoints, marker.strokeWidth, strokeColor);
+                this.renderer.line(shaftPoints, marker.strokeWidth, strokeColor);
+            } else {
+                // Draw filled circle
+                this.renderer.circle(marker.position, marker.radius, marker.color);
+
+                // Draw stroke
+                const strokeColor = marker.color.copy();
+                strokeColor.a = Math.min(1.0, strokeColor.a * 1.5);
+
+                // Create a circle outline using a polyline
+                const segments = 32;
+                const points: Vec2[] = [];
+                for (let i = 0; i <= segments; i++) {
+                    const angle = (i / segments) * Math.PI * 2;
+                    const px = marker.position.x + Math.cos(angle) * marker.radius;
+                    const py = marker.position.y + Math.sin(angle) * marker.radius;
+                    points.push(new Vec2(px, py));
+                }
+
+                this.renderer.line(points, marker.strokeWidth, strokeColor);
+            }
+        }
+
+        layer.graphics = this.renderer.end_layer();
+
+        if (this.#selected) {
             layer.graphics.composite_operation = "overlay";
+        } else {
+            layer.graphics.composite_operation = "source-over";
         }
 
         this.draw();
@@ -266,5 +361,97 @@ export abstract class Viewer extends EventTarget {
         // TODO: it re-paint all items and is inefficient
         this.paint();
         this.draw();
+    }
+
+    /**
+     * Add a marker at the specified world coordinates
+     * @param x - X coordinate in world space
+     * @param y - Y coordinate in world space
+     * @param options - Optional customization options
+     * @returns The marker ID that can be used to remove it later
+     */
+    public addMarker(
+        x: number,
+        y: number,
+        options?: MarkerOptions,
+    ): string {
+        const id = `marker_${this.#marker_counter++}`;
+
+        let color: Color;
+        if (options?.color) {
+            if (typeof options.color === "string") {
+                color = Color.from_css(options.color);
+            } else {
+                color = options.color;
+            }
+        } else {
+            color = Color.from_css("#FF0000"); // Default red
+        }
+
+        const marker: Marker = {
+            id,
+            position: new Vec2(x, y),
+            color,
+            radius: options?.radius ?? 2.0,
+            strokeWidth: options?.strokeWidth ?? 0.5,
+            shape: options?.shape ?? 'circle',
+            visible: true,
+        };
+
+        this.#markers.set(id, marker);
+        later(() => this.paint_selected());
+        return id;
+    }
+
+    /**
+     * Remove a marker by its ID
+     * @param id - The marker ID returned by addMarker
+     */
+    public removeMarker(id: string): void {
+        if (this.#markers.delete(id)) {
+            later(() => this.paint_selected());
+        }
+    }
+
+    /**
+     * Remove all markers
+     */
+    public clearMarkers(): void {
+        this.#markers.clear();
+        later(() => this.paint_selected());
+    }
+
+    /**
+     * Get all current marker IDs
+     */
+    public getMarkerIds(): string[] {
+        return Array.from(this.#markers.keys());
+    }
+
+    /**
+     * Set visibility of all markers
+     * @param visible - true to show markers, false to hide them
+     */
+    public setMarkersVisible(visible: boolean): void {
+        for (const marker of this.#markers.values()) {
+            marker.visible = visible;
+        }
+        later(() => this.paint_selected());
+    }
+
+    /**
+     * Toggle visibility of all markers
+     * @returns The new visibility state
+     */
+    public toggleMarkersVisible(): boolean {
+        // If any marker is visible, hide all. Otherwise show all.
+        const anyVisible = Array.from(this.#markers.values()).some(m => m.visible);
+        const newState = !anyVisible;
+
+        for (const marker of this.#markers.values()) {
+            marker.visible = newState;
+        }
+        later(() => this.paint_selected());
+        return newState;
     }
 }
