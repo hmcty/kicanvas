@@ -447,7 +447,38 @@ export interface HasStrokeParams {
     get stroke_params(): StrokeParams;
 }
 
-/** Items which have a netname */
-export interface HasNetName {
+export class Net {
+    number: number;
+    name: string;
+
+    constructor(expr: Parseable) {
+        // (net 2 "+3V3")
+        Object.assign(
+            this,
+            parse_expr(
+                expr,
+                P.start("net"),
+                P.positional("number", T.number),
+                P.positional("name", T.string),
+            ),
+        );
+    }
+}
+
+/** Items which store info for a single net */
+export interface HasNetInfo {
+    net: number | Net
     get netname(): string | undefined;
+}
+
+export function isNetInfo(obj: any): obj is HasNetInfo {
+    return "net" in obj && obj.__lookupGetter__("netname") !== undefined;
+}
+
+export function getNetNumber(item: HasNetInfo): number {
+    if (typeof item.net === "number") {
+        return item.net;
+    } else {
+        return item.net.number;
+    }
 }

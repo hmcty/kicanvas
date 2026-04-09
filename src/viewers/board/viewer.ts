@@ -9,10 +9,18 @@ import { is_string } from "../../base/types";
 import { Renderer } from "../../graphics";
 import { WebGL2Renderer } from "../../graphics/webgl";
 import type { BoardTheme } from "../../kicad";
+import * as kicad_common from "../../kicad/common";
 import * as board_items from "../../kicad/board";
 import { DocumentViewer } from "../base/document-viewer";
 import { LayerNames, LayerSet, ViewLayer } from "./layers";
 import { BoardPainter } from "./painter";
+
+export type ContextMenuCallback = (
+    screenX: number,
+    screenY: number,
+    items: Map<string, unknown>,
+    onSelect: (item: unknown) => void,
+) => void;
 
 export class BoardViewer extends DocumentViewer<
     board_items.KicadPCB,
@@ -20,8 +28,14 @@ export class BoardViewer extends DocumentViewer<
     LayerSet,
     BoardTheme
 > {
+    #contextMenuCallback: ContextMenuCallback | null = null;
+
     get board(): board_items.KicadPCB {
         return this.document;
+    }
+
+    set contextMenuCallback(callback: ContextMenuCallback | null) {
+        this.#contextMenuCallback = callback;
     }
 
     protected override create_renderer(canvas: HTMLCanvasElement): Renderer {
@@ -45,16 +59,42 @@ export class BoardViewer extends DocumentViewer<
         mouse: Vec2,
         items: Generator<{ layer: ViewLayer; bbox: BBox }, void, unknown>,
     ): void {
-        let selected = null;
-
-        for (const { layer: _, bbox } of items) {
-            if (bbox.context instanceof board_items.Footprint) {
-                selected = bbox.context;
-                break;
+        const selectableItems = new Map<string, unknown>();
+        for (const { bbox } of items) {
+            const item = bbox.context;
+            if (item instanceof board_items.Footprint) {
+                selectableItems.set(
+                  `Footprint: ${item.reference}`,
+                  item,
+                );
+            } else if (kicad_common.isNetInfo(item)) {
+                selectableItems.set(
+                    `Net: ${item.netname}`,
+                    item,
+                );
+            } else {
+              console.log(item);
             }
         }
 
-        this.select(selected);
+        if (selectableItems.size === 0) {
+            this.select(null);
+        } else if (selectableItems.size === 1 || !this.#contextMenuCallback) {
+            this.handleItemClick(selectableItems.values().next().value);
+        } else {
+            const { x, y } = this.viewport.camera.world_to_screen(mouse);
+            this.#contextMenuCallback(x, y, selectableItems, (selected) => {
+                this.handleItemClick(selected);
+            });
+        }
+    }
+
+    handleItemClick(item: unknown) {
+        if (item instanceof board_items.Footprint) {
+            this.select(item);
+        } else if (kicad_common.isNetInfo(item)) {
+            this.highlight_net(kicad_common.getNetNumber(item));
+        }
     }
 
     override select(item: board_items.Footprint | string | BBox | null) {

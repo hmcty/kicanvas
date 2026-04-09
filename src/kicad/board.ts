@@ -15,7 +15,8 @@ import {
     expand_text_vars,
     EmbeddedFile,
     StrokeParams,
-    type HasNetName,
+    Net,
+    type HasNetInfo,
     type HasUniqueID,
     type HasStrokeParams,
 } from "./common";
@@ -172,7 +173,7 @@ export class Property {
     }
 }
 
-export class LineSegment implements HasUniqueID, HasNetName {
+export class LineSegment implements HasUniqueID, HasNetInfo {
     start: Vec2;
     end: Vec2;
     width: number;
@@ -221,7 +222,7 @@ export class LineSegment implements HasUniqueID, HasNetName {
     }
 }
 
-export class ArcSegment implements HasUniqueID, HasNetName {
+export class ArcSegment implements HasUniqueID, HasNetInfo {
     start: Vec2;
     mid: Vec2;
     end: Vec2;
@@ -273,7 +274,7 @@ export class ArcSegment implements HasUniqueID, HasNetName {
     }
 }
 
-export class Via implements HasUniqueID, HasNetName {
+export class Via implements HasUniqueID, HasNetInfo {
     type: "blind" | "micro" | "through-hole" = "through-hole";
     at: At;
     size: number;
@@ -669,24 +670,6 @@ export class StackupLayer {
                 P.pair("material", T.string),
                 P.pair("epsilon_r", T.number),
                 P.pair("loss_tangent", T.number),
-            ),
-        );
-    }
-}
-
-export class Net {
-    number: number;
-    name: string;
-
-    constructor(expr: Parseable) {
-        // (net 2 "+3V3")
-        Object.assign(
-            this,
-            parse_expr(
-                expr,
-                P.start("net"),
-                P.positional("number", T.number),
-                P.positional("name", T.string),
             ),
         );
     }
@@ -1636,7 +1619,7 @@ export class GrText extends Text {
     }
 }
 
-export class Pad implements HasUniqueID, HasNetName {
+export class Pad implements HasUniqueID, HasNetInfo {
     number: string; // I hate this
     type: "thru_hole" | "smd" | "connect" | "np_thru_hole" = "thru_hole";
     shape: "circle" | "rect" | "oval" | "trapezoid" | "roundrect" | "custom";
