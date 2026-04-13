@@ -88,9 +88,11 @@ KiCanvas is open source and published under the permissive MIT license. Please t
 ## Community projects
 
 Projects built on KiCanvas:
+
 - [KiSite](https://github.com/hmcty/kisite): A static site generator for KiCad projects
 
 Projects with overlapping functionality:
+
 - [KiRi](https://github.com/leoheck/kiri): Visual diff tool for schematics and layouts
 - [ecad-viewer](https://github.com/Huaqiu-Electronics/ecad-viewer): Fork of KiCanvas
 - [KiCAD-PRISM](https://github.com/krishna-swaroop/KiCAD-Prism): Cloud-based KiCad workspace, built on `ecad-viewer`
