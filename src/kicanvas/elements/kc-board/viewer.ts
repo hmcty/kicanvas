@@ -23,7 +23,6 @@ export class KCBoardViewerElement extends KCViewerElement<BoardViewer> {
             this.canvas,
             !this.disableinteraction,
             this.themeObject.board,
-            
         );
 
         viewer.contextMenuCallback = (screenX, screenY, items, onSelect) => {

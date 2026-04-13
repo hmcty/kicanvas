@@ -193,4 +193,3 @@ export class KCContextMenuElement extends KCUIElement {
 }
 
 window.customElements.define("kc-context-menu", KCContextMenuElement);
-

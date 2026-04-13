@@ -63,17 +63,11 @@ export class BoardViewer extends DocumentViewer<
         for (const { bbox } of items) {
             const item = bbox.context;
             if (item instanceof board_items.Footprint) {
-                selectableItems.set(
-                  `Footprint: ${item.reference}`,
-                  item,
-                );
+                selectableItems.set(`Footprint: ${item.reference}`, item);
             } else if (kicad_common.isNetInfo(item)) {
-                selectableItems.set(
-                    `Net: ${item.netname}`,
-                    item,
-                );
+                selectableItems.set(`Net: ${item.netname}`, item);
             } else {
-              console.log(item);
+                console.log(item);
             }
         }
 

@@ -467,7 +467,7 @@ export class Net {
 
 /** Items which store info for a single net */
 export interface HasNetInfo {
-    net: number | Net
+    net: number | Net;
     get netname(): string | undefined;
 }
 
